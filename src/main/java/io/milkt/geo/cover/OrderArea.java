@@ -2,7 +2,11 @@ package io.milkt.geo.cover;
 
 import com.google.common.geometry.S2Cell;
 import com.google.common.geometry.S2CellId;
+import com.google.common.geometry.S2CellUnion;
 import com.google.common.geometry.S2LatLng;
+import com.google.common.geometry.S2Loop;
+import com.google.common.geometry.S2Point;
+import com.google.common.geometry.S2RegionCoverer;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -27,9 +31,12 @@ public class OrderArea {
     String sentence = "select lat,lon,yxwcd from delivery_order";
     ResultSet rs = statement.executeQuery(sentence);
 
+    List<S2Point> s2Points = new ArrayList<>();
     HashMap<String, OrderS2CellId> orderS2CellIdHashMap = new HashMap<>();
     while (rs.next()) {
       S2LatLng s2LatLng = S2LatLng.fromDegrees(rs.getDouble(1), rs.getDouble(2));
+      S2Point s2Point = s2LatLng.toPoint();
+      s2Points.add(s2Point);
       S2CellId s2CellId = S2CellId.fromLatLng(s2LatLng);
       s2CellId = s2CellId.parent(15);
       String token = s2CellId.toToken();
@@ -60,5 +67,21 @@ public class OrderArea {
       System.out.println("{area: [" + String.join(",", pointStrs) +"], count: " + orderS2CellId.count + "},");
     }
 
+//    使用等大的cell进行覆盖
+    ArrayList<S2CellId> result = new ArrayList<>();
+    S2RegionCoverer.getSimpleCovering(new S2Loop(s2Points), s2Points.get(0), 18, result);
+    S2Helper.showRect(result);
+
+//    使用贪婪算法最快速度的覆盖
+//    S2RegionCoverer s2RegionCoverer = new S2RegionCoverer();
+//    s2RegionCoverer.setMinLevel(16);
+//    s2RegionCoverer.setMaxLevel(22);
+//    s2RegionCoverer.setMaxCells(500);
+//    s2RegionCoverer.setLevelMod(2);
+//
+//    S2CellUnion s2CellUnion = s2RegionCoverer.getCovering(new S2Loop(s2Points));
+//    System.out.println(s2CellUnion.cellIds().size());
+//
+//    S2Helper.showRect(s2CellUnion);
   }
 }

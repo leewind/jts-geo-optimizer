@@ -57,15 +57,6 @@ public class Cover {
     S2CellUnion s2CellUnion = s2RegionCoverer.getCovering(s2Loop);
     System.out.println(s2CellUnion.cellIds().size());
 
-    for (S2CellId s2cellid : s2CellUnion.cellIds()) {
-      S2Cell s2Cell = new S2Cell(s2cellid);
-      List<String> pointStrs = new ArrayList<>();
-      for (int j = 0; j < 4; j++) {
-        S2LatLng latLng = new S2LatLng(s2Cell.getVertex(j));
-        pointStrs.add("[" + latLng.lng().degrees()+ "," + latLng.lat().degrees() + "]");
-      }
-      System.out.println("[" + String.join(",", pointStrs) +"],");
-    }
-
+    S2Helper.showRect(s2CellUnion);
   }
 }
