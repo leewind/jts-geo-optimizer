@@ -38,7 +38,7 @@ public class OrderArea {
       S2Point s2Point = s2LatLng.toPoint();
       s2Points.add(s2Point);
       S2CellId s2CellId = S2CellId.fromLatLng(s2LatLng);
-      s2CellId = s2CellId.parent(15);
+      s2CellId = s2CellId.parent(16);
       String token = s2CellId.toToken();
 
       OrderS2CellId orderS2CellId;
@@ -64,12 +64,12 @@ public class OrderArea {
         S2LatLng latLng = new S2LatLng(s2Cell.getVertex(j));
         pointStrs.add("[" + latLng.lng().degrees()+ "," + latLng.lat().degrees() + "]");
       }
-      System.out.println("{area: [" + String.join(",", pointStrs) +"], count: " + orderS2CellId.count + "},");
+//      System.out.println("{area: [" + String.join(",", pointStrs) +"], count: " + orderS2CellId.count + "},");
     }
 
 //    使用等大的cell进行覆盖
     ArrayList<S2CellId> result = new ArrayList<>();
-    S2RegionCoverer.getSimpleCovering(new S2Loop(s2Points), s2Points.get(0), 18, result);
+    S2RegionCoverer.getSimpleCovering(new S2Loop(s2Points), s2Points.get(0), 16, result);
     S2Helper.showRect(result);
 
 //    使用贪婪算法最快速度的覆盖
