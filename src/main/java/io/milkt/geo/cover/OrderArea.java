@@ -6,7 +6,14 @@ import com.google.common.geometry.S2CellUnion;
 import com.google.common.geometry.S2LatLng;
 import com.google.common.geometry.S2Loop;
 import com.google.common.geometry.S2Point;
+import com.google.common.geometry.S2Polygon;
+import com.google.common.geometry.S2PolygonBuilder;
 import com.google.common.geometry.S2RegionCoverer;
+import com.vividsolutions.jts.geom.Coordinate;
+import com.vividsolutions.jts.geom.Geometry;
+import com.vividsolutions.jts.geom.GeometryFactory;
+import com.vividsolutions.jts.geom.LinearRing;
+import com.vividsolutions.jts.geom.Polygon;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -56,7 +63,6 @@ public class OrderArea {
 
     for (String token: orderS2CellIdHashMap.keySet()) {
       OrderS2CellId orderS2CellId = orderS2CellIdHashMap.get(token);
-//      System.out.println(orderS2CellId.count);
 
       S2Cell s2Cell = new S2Cell(orderS2CellId.s2CellId);
       List<String> pointStrs = new ArrayList<>();
@@ -70,7 +76,71 @@ public class OrderArea {
 //    使用等大的cell进行覆盖
     ArrayList<S2CellId> result = new ArrayList<>();
     S2RegionCoverer.getSimpleCovering(new S2Loop(s2Points), s2Points.get(0), 16, result);
-    S2Helper.showRect(result);
+//    S2Helper.showRect(result);
+
+
+    HashMap<String, S2Cell> maps = new HashMap<>();
+    for (S2CellId s2CellId : result){
+      maps.put(s2CellId.toToken(), new S2Cell(s2CellId));
+    }
+
+    List<S2CellId> finalResults = new ArrayList<>();
+
+    for (S2CellId s2CellId : result){
+
+      List<S2CellId> out = new ArrayList<>();
+      s2CellId.getAllNeighbors(16, out);
+
+      boolean isOutside = false;
+      for (S2CellId one: out) {
+        isOutside = isOutside || !maps.containsKey(one.toToken());
+      }
+
+      if (isOutside){
+        finalResults.add(s2CellId);
+      }
+
+    }
+
+//    S2Helper.showRect(finalResults);
+
+    List<Coordinate> inputs = new ArrayList<>();
+    for (S2CellId oneId: finalResults) {
+      S2Cell s2Cell = new S2Cell(oneId);
+      S2Point s2Point = s2Cell.getCenter();
+
+      S2LatLng latLng = new S2LatLng(s2Point);
+
+//      pointStrs.add("[" + latLng.lng().degrees()+ "," + latLng.lat().degrees() + "]");
+
+      inputs.add(new Coordinate(latLng.lng().degrees(), latLng.lat().degrees()));
+//      System.out.println(s2Point.toDegreesString());
+    }
+
+    GeometryFactory factory = new GeometryFactory();
+
+    inputs.add(inputs.get(0));
+
+    Coordinate[] coordinates = new Coordinate[inputs.size()];
+    coordinates = inputs.toArray(coordinates);
+
+    LinearRing linearRing = factory.createLinearRing(coordinates);
+    Geometry polygon = factory.createPolygon(linearRing);
+
+//    polygon = polygon.buffer(0);
+//    polygon = polygon.convexHull();
+
+    List<String> pointStrs = new ArrayList<>();
+    Coordinate[] outSidePoints = polygon.getCoordinates();
+    for(Coordinate coordinate:outSidePoints) {
+      pointStrs.add("[" + coordinate.x+ "," + coordinate.y + "]");
+    }
+
+    System.out.println("[" + String.join(",", pointStrs) +"],");
+
+
+
+
 
 //    使用贪婪算法最快速度的覆盖
 //    S2RegionCoverer s2RegionCoverer = new S2RegionCoverer();
