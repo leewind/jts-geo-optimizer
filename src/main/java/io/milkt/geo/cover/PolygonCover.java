@@ -37,7 +37,6 @@ public class PolygonCover {
     Class.forName("com.mysql.jdbc.Driver");
     Connection conn = DriverManager.getConnection(CONNECTION_URL);
 
-
     List<S2Point> s2Points = S2Helper.distribute(13653);
 
 //    使用等大的cell进行全面积的覆盖
