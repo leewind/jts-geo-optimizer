@@ -34,7 +34,7 @@ public class S2Helper {
 
     Statement statement = conn.createStatement();
 
-    String sentence = "select lat,lon,yxwcd from delivery_order where grid_id=" + gridId;
+    String sentence = "select DISTINCT lat,lon,yxwcd from delivery_order where grid_id=" + gridId;
     return statement.executeQuery(sentence);
   }
 
@@ -62,16 +62,13 @@ public class S2Helper {
     }
   }
 
-  public static List<S2Point> distribute(int gridId) throws ClassNotFoundException, SQLException {
-
+  public static HashMap<String, OrderS2CellId> cluster(int gridId)
+      throws SQLException, ClassNotFoundException {
     ResultSet rs = search(gridId);
-
-    List<S2Point> s2Points = new ArrayList<>();
     HashMap<String, OrderS2CellId> orderS2CellIdHashMap = new HashMap<>();
     while (rs.next()) {
       S2LatLng s2LatLng = S2LatLng.fromDegrees(rs.getDouble(1), rs.getDouble(2));
       S2Point s2Point = s2LatLng.toPoint();
-      s2Points.add(s2Point);
       S2CellId s2CellId = S2CellId.fromLatLng(s2LatLng);
       s2CellId = s2CellId.parent(16);
       String token = s2CellId.toToken();
@@ -89,13 +86,18 @@ public class S2Helper {
       orderS2CellIdHashMap.put(token, orderS2CellId);
     }
 
-    for (String token: orderS2CellIdHashMap.keySet()) {
-      OrderS2CellId orderS2CellId = orderS2CellIdHashMap.get(token);
+    return orderS2CellIdHashMap;
+  }
 
-      S2Cell s2Cell = new S2Cell(orderS2CellId.s2CellId);
-      for (int j = 0; j < 4; j++) {
-        S2LatLng latLng = new S2LatLng(s2Cell.getVertex(j));
-      }
+  public static List<S2Point> distribute(int gridId) throws ClassNotFoundException, SQLException {
+
+    ResultSet rs = search(gridId);
+
+    List<S2Point> s2Points = new ArrayList<>();
+    while (rs.next()) {
+      S2LatLng s2LatLng = S2LatLng.fromDegrees(rs.getDouble(1), rs.getDouble(2));
+      S2Point s2Point = s2LatLng.toPoint();
+      s2Points.add(s2Point);
     }
 
     return s2Points;

@@ -19,6 +19,7 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
@@ -37,11 +38,13 @@ public class PolygonCover {
     Class.forName("com.mysql.jdbc.Driver");
     Connection conn = DriverManager.getConnection(CONNECTION_URL);
 
-    List<S2Point> s2Points = S2Helper.distribute(13653);
+    List<S2Point> s2Points = S2Helper.distribute(6428);
+    System.out.println("计算出点的数量是：" + s2Points.size());
 
 //    使用等大的cell进行全面积的覆盖
     ArrayList<S2CellId> result = new ArrayList<>();
     S2RegionCoverer.getSimpleCovering(new S2Loop(s2Points), s2Points.get(0), 16, result);
+    System.out.println("覆盖的cell的数量是：" + result.size());
 
     HashMap<String, S2CellId> maps = new HashMap<>();
     for (S2CellId s2CellId : result) {
@@ -50,29 +53,79 @@ public class PolygonCover {
 
 //    对每个S2Cell求相邻边同等级Cell，如果这个Cell不在Map中，并且Cell的相邻边同等级Cell都在Map中含有，
 //    说明他是被包围住的中空的Cell需要被填补，对应的是一个被包围的空白Cell
-    for (S2CellId s2CellId : result) {
 
-      S2CellId[] out = new S2CellId[4];
-      s2CellId.getEdgeNeighbors(out);
+    boolean isModified = true;
+    while(isModified) {
 
-      for (S2CellId one : out) {
-        if (maps.containsKey(one.toToken())) {
-          continue;
-        }
+      isModified = false;
 
-        boolean isInside = true;
-        S2CellId[] nexts = new S2CellId[4];
-        one.getEdgeNeighbors(nexts);
+      for (int i = 0; i < result.size(); i++) {
 
-        for (S2CellId next : nexts) {
-          isInside = isInside && maps.containsKey(next.toToken());
-        }
+        List<S2CellId> out = new ArrayList<>();
+        result.get(i).getAllNeighbors(16, out);
 
-        if (isInside) {
-          maps.put(one.toToken(), one);
+        for (S2CellId one : out) {
+          if (maps.containsKey(one.toToken())) {
+            continue;
+          }
+
+          boolean isEdgeInside = true;
+          S2CellId[] nexts = new S2CellId[4];
+          one.getEdgeNeighbors(nexts);
+
+          for (S2CellId next : nexts) {
+            isEdgeInside = isEdgeInside && maps.containsKey(next.toToken());
+          }
+
+          if (isEdgeInside) {
+            isModified = true;
+            System.out.println("edge inside");
+            maps.put(one.toToken(), one);
+            result.add(one);
+          }
+
+//        --------------------------------------------------       //
+
+          boolean isVertexInside = true;
+          List<S2CellId> list = new ArrayList<>();
+          one.getVertexNeighbors(16, list);
+
+          for (S2CellId next : list) {
+            isVertexInside = isVertexInside && maps.containsKey(next.toToken());
+          }
+
+          if (isVertexInside) {
+            isModified = true;
+            System.out.println("vertex inside");
+            maps.put(one.toToken(), one);
+            result.add(one);
+          }
+
+
+//          ------------------------------------------------      //
+//          局部最优解，一步步向里吃，需要在凹多边形进行验证
+
+          List<S2CellId> neighbors = new ArrayList<>();
+          one.getAllNeighbors(16, neighbors);
+
+          int count = 0 ;
+          for (S2CellId next : neighbors) {
+            if (maps.containsKey(next.toToken())){
+              count++;
+            }
+          }
+
+          if (count >= 5){
+            isModified = true;
+            System.out.println("neighbor inside");
+            maps.put(one.toToken(), one);
+            result.add(one);
+          }
         }
       }
     }
+
+    S2Helper.showRect(result);
 
 //    对每个cell取100m的范围获取高德的poi信息，并落库
 //    从poi信息中获得，如果是路障poi信息进行清除
@@ -95,7 +148,6 @@ public class PolygonCover {
         response = AmapFacade.getCellInfo(coordinate);
 
 //        @TODO 判断一下如果返回OK, 存库
-
         String sentence = String.format(
             "insert into cell_geo_info (cellid, token, lng, lat, detail) values (%d, \'%s\', %f, %f, \'%s\')",
             s2CellId.id(), s2CellId.toToken(), s2LatLng.lngDegrees(), s2LatLng.latDegrees(),
@@ -125,14 +177,32 @@ public class PolygonCover {
 
 //    对cell进行封装，把它做成geometry队列
     List<Geometry> geometries = new ArrayList<>();
-    for (String token : maps.keySet()) {
-      geometries.add(JTSHelper.s2CellConvertToGeometry(new S2Cell(maps.get(token))));
+
+    List<Long> ids = new ArrayList<>();
+    for (String token: maps.keySet()) {
+      ids.add(maps.get(token).id());
     }
+
+    Collections.sort(ids);
+
+    for (Long id: ids) {
+      S2CellId s2CellId = new S2CellId(id);
+      S2Cell s2Cell = new S2Cell(s2CellId);
+      geometries.add(JTSHelper.s2CellConvertToGeometry(s2Cell));
+    }
+
+
+//    Set<String> keySet = maps.keySet();
+//    Iterator<String> iterator = keySet.iterator();
+//    while(iterator.hasNext()){
+//      String token = iterator.next();
+//      geometries.add(JTSHelper.s2CellConvertToGeometry(new S2Cell(maps.get(token))));
+//    }
 
     showGeometry(geometries);
   }
 
-  public static Polygon acquireMax(MultiPolygon multiPolygon) {
+  private static Polygon acquireMax(MultiPolygon multiPolygon) {
     Polygon polygon = null;
     for (int i=0;i < multiPolygon.getNumGeometries(); i++) {
       if (polygon == null || polygon.getArea() < (multiPolygon.getGeometryN(i)).getArea()) {
@@ -149,18 +219,22 @@ public class PolygonCover {
 
     GeometryFactory factory = new GeometryFactory();
     GeometryCollection geometryCollection = factory.createGeometryCollection(geometryArray);
-    Geometry geometry = geometryCollection.union();
+    Geometry buffer = geometryCollection.union();
+    buffer = buffer.union();
+//    Geometry buffer = geometry.buffer(0);
 
     Polygon polygon = null;
-    if (geometry instanceof MultiPolygon){
-      MultiPolygon multiPolygon = (MultiPolygon) geometry;
+    if (buffer instanceof MultiPolygon){
+      MultiPolygon multiPolygon = (MultiPolygon) buffer;
       polygon = acquireMax(multiPolygon);
-    }else if (geometry instanceof Polygon) {
-      polygon = (Polygon) geometry;
+    }else if (buffer instanceof Polygon) {
+      polygon = (Polygon) buffer;
     }
 
     List<String> pointStrs = new ArrayList<>();
     Coordinate[] outSidePoints = polygon.getCoordinates();
+
+//        polygon.getEnvelope().getCoordinates();
     for (Coordinate coordinate : outSidePoints) {
       pointStrs.add("[" + coordinate.x + "," + coordinate.y + "]");
     }
