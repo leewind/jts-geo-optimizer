@@ -27,7 +27,7 @@ import java.util.List;
  * Created by leewind on 2017/12/7.
  *
  * @author leewind (leewind19841209@gmail.com)
- * @version v0.1 2017.12.8
+ * @version v0.2 2017.12.12
  */
 public class PolygonCover {
 
@@ -38,11 +38,16 @@ public class PolygonCover {
     Class.forName("com.mysql.jdbc.Driver");
     Connection conn = DriverManager.getConnection(CONNECTION_URL);
 
-    List<S2Point> s2Points = S2Helper.distribute(6428);
+    List<S2Point> s2Points = S2Helper.distribute(6101);
+    Collections.reverse(s2Points);
     System.out.println("计算出点的数量是：" + s2Points.size());
 
 //    使用等大的cell进行全面积的覆盖
+//    网格45，需要覆盖的点1174个，计算速度特别慢
     ArrayList<S2CellId> result = new ArrayList<>();
+
+    Collections.sort(s2Points);
+    Collections.reverse(s2Points);
     S2RegionCoverer.getSimpleCovering(new S2Loop(s2Points), s2Points.get(0), 16, result);
     System.out.println("覆盖的cell的数量是：" + result.size());
 
@@ -53,10 +58,8 @@ public class PolygonCover {
 
 //    对每个S2Cell求相邻边同等级Cell，如果这个Cell不在Map中，并且Cell的相邻边同等级Cell都在Map中含有，
 //    说明他是被包围住的中空的Cell需要被填补，对应的是一个被包围的空白Cell
-
     boolean isModified = true;
     while(isModified) {
-
       isModified = false;
 
       for (int i = 0; i < result.size(); i++) {
@@ -100,7 +103,6 @@ public class PolygonCover {
             maps.put(one.toToken(), one);
             result.add(one);
           }
-
 
 //          ------------------------------------------------      //
 //          局部最优解，一步步向里吃，需要在凹多边形进行验证
@@ -173,8 +175,6 @@ public class PolygonCover {
       maps.remove(token);
     }
 
-//    S2Helper.showRect(maps);
-
 //    对cell进行封装，把它做成geometry队列
     List<Geometry> geometries = new ArrayList<>();
 
@@ -190,14 +190,6 @@ public class PolygonCover {
       S2Cell s2Cell = new S2Cell(s2CellId);
       geometries.add(JTSHelper.s2CellConvertToGeometry(s2Cell));
     }
-
-
-//    Set<String> keySet = maps.keySet();
-//    Iterator<String> iterator = keySet.iterator();
-//    while(iterator.hasNext()){
-//      String token = iterator.next();
-//      geometries.add(JTSHelper.s2CellConvertToGeometry(new S2Cell(maps.get(token))));
-//    }
 
     showGeometry(geometries);
   }
@@ -219,9 +211,8 @@ public class PolygonCover {
 
     GeometryFactory factory = new GeometryFactory();
     GeometryCollection geometryCollection = factory.createGeometryCollection(geometryArray);
-    Geometry buffer = geometryCollection.union();
-    buffer = buffer.union();
-//    Geometry buffer = geometry.buffer(0);
+    Geometry geometry = geometryCollection.union();
+    Geometry buffer = geometry.buffer(0);
 
     Polygon polygon = null;
     if (buffer instanceof MultiPolygon){
@@ -234,12 +225,9 @@ public class PolygonCover {
     List<String> pointStrs = new ArrayList<>();
     Coordinate[] outSidePoints = polygon.getCoordinates();
 
-//        polygon.getEnvelope().getCoordinates();
     for (Coordinate coordinate : outSidePoints) {
       pointStrs.add("[" + coordinate.x + "," + coordinate.y + "]");
     }
-
     System.out.println("[" + String.join(",", pointStrs) + "],");
   }
-
 }

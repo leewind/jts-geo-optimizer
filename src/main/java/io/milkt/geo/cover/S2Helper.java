@@ -34,7 +34,7 @@ public class S2Helper {
 
     Statement statement = conn.createStatement();
 
-    String sentence = "select DISTINCT lat,lon,yxwcd from delivery_order where grid_id=" + gridId;
+    String sentence = "select distinct lat,lon,yxwcd from delivery_order where grid_id=" + gridId + " order by lat";
     return statement.executeQuery(sentence);
   }
 
