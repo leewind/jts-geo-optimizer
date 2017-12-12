@@ -17,6 +17,7 @@ import com.vividsolutions.jts.geom.Polygon;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,10 +36,7 @@ public class PolygonCover {
 
   public static void main(String[] args) throws Exception {
 
-    Class.forName("com.mysql.jdbc.Driver");
-    Connection conn = DriverManager.getConnection(CONNECTION_URL);
-
-    List<S2Point> s2Points = S2Helper.distribute(6101);
+    List<S2Point> s2Points = S2Helper.distribute(45);
     Collections.reverse(s2Points);
     System.out.println("计算出点的数量是：" + s2Points.size());
 
@@ -129,9 +127,42 @@ public class PolygonCover {
 
     S2Helper.showRect(result);
 
+    clean(maps);
+
+//    对cell进行封装，把它做成geometry队列
+    List<Geometry> geometries = new ArrayList<>();
+
+    List<Long> ids = new ArrayList<>();
+    for (String token: maps.keySet()) {
+      ids.add(maps.get(token).id());
+    }
+
+    Collections.sort(ids);
+
+    for (Long id: ids) {
+      S2CellId s2CellId = new S2CellId(id);
+      S2Cell s2Cell = new S2Cell(s2CellId);
+      geometries.add(JTSHelper.s2CellConvertToGeometry(s2Cell));
+    }
+
+    showGeometry(geometries);
+  }
+
+  /**
+   * 对maps中所有的cell进行清理，如果发现在黄浦江中就剔除
+   * 我们需要有一组类似黄浦江这样的词库
+   *
+   * @param maps
+   * @throws ClassNotFoundException
+   * @throws SQLException
+   */
+  private static void clean(HashMap<String, S2CellId> maps)
+      throws ClassNotFoundException, SQLException {
+    Class.forName("com.mysql.jdbc.Driver");
+    Connection conn = DriverManager.getConnection(CONNECTION_URL);
+
 //    对每个cell取100m的范围获取高德的poi信息，并落库
 //    从poi信息中获得，如果是路障poi信息进行清除
-
     int j = 0;
     List<String> removeList = new ArrayList<>();
     for(String token: maps.keySet()){
@@ -174,24 +205,6 @@ public class PolygonCover {
     for (String token : removeList) {
       maps.remove(token);
     }
-
-//    对cell进行封装，把它做成geometry队列
-    List<Geometry> geometries = new ArrayList<>();
-
-    List<Long> ids = new ArrayList<>();
-    for (String token: maps.keySet()) {
-      ids.add(maps.get(token).id());
-    }
-
-    Collections.sort(ids);
-
-    for (Long id: ids) {
-      S2CellId s2CellId = new S2CellId(id);
-      S2Cell s2Cell = new S2Cell(s2CellId);
-      geometries.add(JTSHelper.s2CellConvertToGeometry(s2Cell));
-    }
-
-    showGeometry(geometries);
   }
 
   private static Polygon acquireMax(MultiPolygon multiPolygon) {
